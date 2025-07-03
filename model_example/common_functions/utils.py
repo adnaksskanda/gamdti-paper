@@ -168,6 +168,9 @@ def plot_pmf_with_TI_2d_fig(pmfs, ti_df, dof1, dof2):
 # Shuffles the TI data, then does a 5x5-fold cross validation (Repeated Stratified k-fold CV) to 
 # produce a training and test R2 as well as a feature importance dataframe containing the feature importances
 # in each of the 25 separate trainings of the model.
+#
+# Note that this function will not work if your pipeline isn't exactly the same as ours, the computation for 
+# average R^2 is hardcoded based on the exact pipeline we are using.
 # 
 # pipeline - pre-defined model pipeline (we are using recursive feature elimination via decision tree, then a random forest)
 # Xin - independent variables, here geometric degrees of freedom (aka interatomic distances and rotamer angles)
@@ -282,6 +285,9 @@ def weighted_lambdas(runNum, rst=True):
 # rst = restart, which is default, however certain jobs (such as those with NMR restraints added to 
 # previously equilibrated coordinates) are not restarted from previous trajectories. One extra
 # DV/DL is added for non-restart jobs which must be sliced.
+
+# Note that this is hard-coded for 12 lambdas with 200 frames per lambda - you may have to adjust these
+# parameters for the frame counts for your simulations.
 def read_rotamers(runNum, rst=True):
     chi = pd.DataFrame()
     
@@ -300,6 +306,64 @@ def read_rotamers(runNum, rst=True):
     return chi
     
 
+# Given a dataframe with lambda values in column "Lambda" and dvdl values in column "dvdl", 
+# and using a 12-point Gaussian quadrature, use bootstrap sampling to compute the dG 
+# 
+# bootstrap_repeats - amount of times to do the bootstrapping process (number of dGs computed)
+# samples_per_lambda - amount of times to sample each lambda value for a single bootstrap run
+def bootstrap_df(df, bootstrap_repeats, samples_per_lambda):
 
+    weights = [0.02359, 0.05347, 0.08004, 0.10158, 0.11675, 0.12457, 0.12457, 0.11675, 0.10158, 0.08004, 0.05347, 0.02359]
+    unique_lambdas = np.sort(df["Lambda"].unique())
+    delta_g = []
 
+    for i in range(bootstrap_repeats):
+        mean_dvdls = []
 
+        for lam in unique_lambdas:
+            dvdls = df[df["Lambda"] == lam]["dvdl"]
+            bootstrap_sample = dvdls.sample(n=samples_per_lambda, replace=True)
+
+            mean_dvdls.append(bootstrap_sample.mean())
+
+        delta_g.append(np.dot(mean_dvdls, weights))
+
+    return np.array(delta_g)
+
+# prints the ddG and the 95% CI/uncertainty of the dG estimate based on bootstrapping
+#
+# first, take a dataframe with dvdl's and lambda indices for each row and plug it into the
+# bootstrap_df function for the bound and unbound state, then feed it into this summarizer function.
+def print_summary(bound, unbound):
+    ddGs = bound - unbound
+    cis = [np.percentile(ddGs, 2.5), np.percentile(ddGs, 97.5)]
+    
+    print(f"Total ddG: {round(np.mean(ddGs), 4)} +/- {round(max(abs(np.mean(ddGs) - cis)), 4)}")
+    print(f"Lower CI: {round(cis[0], 4)}")
+    print(f"Upper CI: {round(cis[1], 4)}")
+    return ddGs
+    
+# print_summary_crg is simply print_summary modified for a two-step process (separating charging step
+# and vdw step). Similarly, it prints the ddG and the 95% CI/uncertainty of the dG estimate based on 
+# bootstrapping
+def print_summary_crg(crg, crg_ub, vdw, vdw_ub):
+    crg_ddGs = crg - crg_ub
+    vdw_ddGs = vdw - vdw_ub
+    total_ddGs = crg_ddGs + vdw_ddGs
+    crg_cis = [np.percentile(crg_ddGs, 2.5), np.percentile(crg_ddGs, 97.5)]
+    vdw_cis = [np.percentile(vdw_ddGs, 2.5), np.percentile(vdw_ddGs, 97.5)]
+    total_cis = [np.percentile(total_ddGs, 2.5), np.percentile(total_ddGs, 97.5)]
+
+    print(f"Charging step ddG: {round(np.mean(crg_ddGs), 4)} +/- {round(max(abs(np.mean(crg_ddGs) - crg_cis)), 4)}")
+    print(f"Lower CI: {round(crg_cis[0], 4)}")
+    print(f"Upper CI: {round(crg_cis[1], 4)}")
+    print()
+    print(f"Vdw step ddG: {round(np.mean(vdw_ddGs), 4)} +/- {round(max(abs(np.mean(vdw_ddGs) - vdw_cis)), 4)}")
+    print(f"Lower CI: {round(vdw_cis[0], 4)}")
+    print(f"Upper CI: {round(vdw_cis[1], 4)}")
+    print()
+    print(f"Total ddG: {round(np.mean(total_ddGs), 4)} +/- {round(max(abs(np.mean(total_ddGs) - total_cis)), 4)}")
+    print(f"Lower CI: {round(total_cis[0], 4)}")
+    print(f"Upper CI: {round(total_cis[1], 4)}")
+
+    return total_ddGs
