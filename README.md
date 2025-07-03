@@ -1,6 +1,6 @@
 ## Thermodynamic integration error analysis paper 
 
-This repository contains relevant scripts and notebooks for the research paper "Investigating errors in alchemical free energy predictions using a combination of random forest models and GaMD". 
+This repository contains relevant scripts and notebooks for the research paper "Investigating errors in alchemical free energy predictions using random forest models and GaMD". 
 
 `init_structures` contains the PDB structure for hu4d5-5 we used for all hu4d5-5 mutation predictions
 `TI_scripts` contains scripts we used to generate Amber input files for thermodynamic integration.
