@@ -1,4 +1,4 @@
-## Thermodynamic integration error analysis paper 
+## Code and digital materials for Investigating errors in alchemical free energy predictions using random forest models and GaMD paper
 
 This repository contains relevant scripts and notebooks for the research paper "Investigating errors in alchemical free energy predictions using random forest models and GaMD". 
 
